@@ -1,78 +1,78 @@
-# Data Ingestion Service
+# Servicio de Ingesta de Datos
 
-A service for ingesting and managing data from various partners, built using Domain-Driven Design (DDD) principles and Hexagonal Architecture.
+Un servicio para ingerir y gestionar datos de varios socios, construido utilizando principios de Diseño Orientado a Dominio (DDD) y Arquitectura Hexagonal.
 
-## Architecture
+## Arquitectura
 
-This project follows a Hexagonal Architecture (Ports and Adapters) with the following layers:
+Este proyecto sigue una Arquitectura Hexagonal (Puertos y Adaptadores) con las siguientes capas:
 
-- **Domain Layer**: Contains the core business logic, entities, value objects, and domain events.
-- **Application Layer**: Contains application services, commands, and queries (CQS pattern).
-- **Infrastructure Layer**: Contains implementations of repositories, event bus, and API endpoints.
+- **Capa de Dominio**: Contiene la lógica empresarial central, entidades, objetos de valor y eventos de dominio.
+- **Capa de Aplicación**: Contiene servicios de aplicación, comandos y consultas (patrón CQS).
+- **Capa de Infraestructura**: Contiene implementaciones de repositorios, bus de eventos y puntos finales de API.
 
-## Domain-Driven Design Elements
+## Elementos de Diseño Orientado a Dominio
 
-The service implements the following DDD concepts:
+El servicio implementa los siguientes conceptos de DDD:
 
-- **Entities**: Domain objects with identity (e.g., `IngestedData`)
-- **Value Objects**: Immutable objects without identity (e.g., `PartnerId`, `Payload`, `Timestamp`)
-- **Aggregates**: Cluster of domain objects treated as a unit (e.g., `IngestedData` as an aggregate root)
-- **Repositories**: Persistence abstractions (e.g., `DataRepository`)
-- **Domain Events**: Events that represent something that happened in the domain (e.g., `DataIngested`)
-- **Factories**: Objects that create complex domain objects (e.g., `IngestedDataFactory`)
+- **Entidades**: Objetos de dominio con identidad (por ejemplo, `IngestedData`)
+- **Objetos de Valor**: Objetos inmutables sin identidad (por ejemplo, `PartnerId`, `Payload`, `Timestamp`)
+- **Agregados**: Conjunto de objetos de dominio tratados como una unidad (por ejemplo, `IngestedData` como raíz de agregado)
+- **Repositorios**: Abstracciones de persistencia (por ejemplo, `DataRepository`)
+- **Eventos de Dominio**: Eventos que representan algo que sucedió en el dominio (por ejemplo, `DataIngested`)
+- **Fábricas**: Objetos que crean objetos de dominio complejos (por ejemplo, `IngestedDataFactory`)
 
-## Command Query Separation (CQS)
+## Separación de Comandos y Consultas (CQS)
 
-The service uses the CQS pattern to separate operations that modify state (commands) from operations that read state (queries):
+El servicio utiliza el patrón CQS para separar las operaciones que modifican el estado (comandos) de las operaciones que leen el estado (consultas):
 
-- **Commands**: `IngestDataCommand`
-- **Queries**: `GetDataByIdQuery`, `GetAllDataQuery`, `GetDataByPartnerIdQuery`
+- **Comandos**: `IngestDataCommand`
+- **Consultas**: `GetDataByIdQuery`, `GetAllDataQuery`, `GetDataByPartnerIdQuery`
 
-## Event-Driven Communication
+## Comunicación Basada en Eventos
 
-Communication between different modules is done through domain events:
+La comunicación entre diferentes módulos se realiza a través de eventos de dominio:
 
-1. When data is ingested, a `DataIngested` event is published
-2. Subscribers can react to these events (e.g., logging, further processing)
+1. Cuando se ingesta datos, se publica un evento `DataIngested`
+2. Los suscriptores pueden reaccionar a estos eventos (por ejemplo, registro, procesamiento adicional)
 
-## Database
+## Base de Datos
 
-The service uses SQLAlchemy for database operations, with support for:
+El servicio utiliza SQLAlchemy para operaciones de base de datos, con soporte para:
 
-- SQLite (default for development)
+- SQLite (predeterminado para desarrollo)
 
-## Getting Started
+## Comenzando
 
-### Prerequisites
+### Requisitos Previos
 
 - Python 3.9+
-- PostgreSQL (optional, SQLite is used by default)
+- PostgreSQL (opcional, SQLite se utiliza por defecto)
 
-### Installation
+### Instalación
 
-1. Clone the repository
-2. Install dependencies:
+1. Clona el repositorio
+2. Instala las dependencias:
    ```
    pip install -r requirements.txt
    ```
-3. Configure the database in `.env` file (optional)
-4. Run the application:
+3. Configura la base de datos en el archivo `.env` (opcional)
+4. Ejecuta la aplicación:
    ```
    python main.py
    ```
 
 ### Docker
 
-To run the service using Docker:
+Para ejecutar el servicio utilizando Docker:
 
 ```
 docker build -t ingestion-service .
 docker run -p 5001:5001 ingestion-service
 ```
 
-## API Endpoints
+## Puntos Finales de la API
 
-- `POST /ingest`: Ingest new data
-- `GET /ingest/<data_id>`: Get data by ID
-- `GET /ingest/partner/<partner_id>`: Get all data for a specific partner
-- `GET /ingest/all`: Get all ingested data
+- `POST /ingest`: Ingestar nuevos datos
+- `GET /ingest/<data_id>`: Obtener datos por ID
+- `GET /ingest/partner/<partner_id>`: Obtener todos los datos para un socio específico
+- `GET /ingest/all`: Obtener todos los datos ingeridos
