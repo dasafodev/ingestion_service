@@ -1,78 +1,142 @@
-# Servicio de Ingesta de Datos
+# Data Ingestion Service - Microservices Architecture
 
-Un servicio para ingerir y gestionar datos de varios socios, construido utilizando principios de Diseño Orientado a Dominio (DDD) y Arquitectura Hexagonal.
+Este proyecto implementa un servicio de ingesta de datos utilizando una arquitectura de microservicios que se comunican a través de Apache Pulsar, siguiendo los principios de la arquitectura hexagonal (puertos y adaptadores).
 
 ## Arquitectura
 
-Este proyecto sigue una Arquitectura Hexagonal (Puertos y Adaptadores) con las siguientes capas:
+El sistema está compuesto por los siguientes microservicios:
 
-- **Capa de Dominio**: Contiene la lógica empresarial central, entidades, objetos de valor y eventos de dominio.
-- **Capa de Aplicación**: Contiene servicios de aplicación, comandos y consultas (patrón CQS).
-- **Capa de Infraestructura**: Contiene implementaciones de repositorios, bus de eventos y puntos finales de API.
+1. **Servicio de Ingesta (Ingestion Service)**: Recibe datos de socios externos y los almacena en la base de datos.
+2. **Servicio de Consulta (Query Service)**: Proporciona endpoints para consultar los datos almacenados.
+3. **Servicio de Procesamiento (Processing Service)**: Procesa los datos ingresados y genera resultados.
+4. **Servicio de Validación (Validation Service)**: Valida los datos ingresados según reglas de negocio.
 
-## Elementos de Diseño Orientado a Dominio
+Los microservicios se comunican entre sí mediante eventos publicados en Apache Pulsar, lo que permite un acoplamiento débil y una alta escalabilidad.
 
-El servicio implementa los siguientes conceptos de DDD:
+## Eventos del Dominio
 
-- **Entidades**: Objetos de dominio con identidad (por ejemplo, `IngestedData`)
-- **Objetos de Valor**: Objetos inmutables sin identidad (por ejemplo, `PartnerId`, `Payload`, `Timestamp`)
-- **Agregados**: Conjunto de objetos de dominio tratados como una unidad (por ejemplo, `IngestedData` como raíz de agregado)
-- **Repositorios**: Abstracciones de persistencia (por ejemplo, `DataRepository`)
-- **Eventos de Dominio**: Eventos que representan algo que sucedió en el dominio (por ejemplo, `DataIngested`)
-- **Fábricas**: Objetos que crean objetos de dominio complejos (por ejemplo, `IngestedDataFactory`)
+- **DataIngested**: Se publica cuando se ingresan nuevos datos.
+- **DataProcessed**: Se publica cuando los datos han sido procesados.
+- **DataValidated**: Se publica cuando los datos han sido validados.
 
-## Separación de Comandos y Consultas (CQS)
+## Tecnologías Utilizadas
 
-El servicio utiliza el patrón CQS para separar las operaciones que modifican el estado (comandos) de las operaciones que leen el estado (consultas):
+- **Python**: Lenguaje de programación principal.
+- **Flask**: Framework web para los endpoints HTTP.
+- **SQLAlchemy**: ORM para la persistencia de datos.
+- **Apache Pulsar**: Sistema de mensajería para la comunicación entre microservicios.
+- **Docker**: Contenedorización de los microservicios.
+- **PostgreSQL**: Base de datos relacional.
 
-- **Comandos**: `IngestDataCommand`
-- **Consultas**: `GetDataByIdQuery`, `GetAllDataQuery`, `GetDataByPartnerIdQuery`
+## Estructura del Proyecto
 
-## Comunicación Basada en Eventos
+```
+ingestion_service/
+├── domain/                 # Capa de dominio (entidades, eventos, etc.)
+├── application/            # Capa de aplicación (servicios, comandos, consultas)
+├── infrastructure/         # Capa de infraestructura (implementaciones concretas)
+├── microservices/          # Implementaciones de microservicios
+│   ├── ingestion_service/  # Servicio de ingesta
+│   ├── query_service/      # Servicio de consulta
+│   ├── processing_service/ # Servicio de procesamiento
+│   └── validation_service/ # Servicio de validación
+├── docker-compose.yml      # Configuración de Docker Compose
+└── requirements.txt        # Dependencias del proyecto
+```
 
-La comunicación entre diferentes módulos se realiza a través de eventos de dominio:
-
-1. Cuando se ingesta datos, se publica un evento `DataIngested`
-2. Los suscriptores pueden reaccionar a estos eventos (por ejemplo, registro, procesamiento adicional)
-
-## Base de Datos
-
-El servicio utiliza SQLAlchemy para operaciones de base de datos, con soporte para:
-
-- SQLite (predeterminado para desarrollo)
-
-## Comenzando
+## Instalación y Ejecución
 
 ### Requisitos Previos
 
-- Python 3.9+
-- PostgreSQL (opcional, SQLite se utiliza por defecto)
+- Docker y Docker Compose
+- Python 3.9 o superior (para desarrollo local)
 
-### Instalación
+### Ejecución con Docker Compose
 
-1. Clona el repositorio
-2. Instala las dependencias:
+1. Clonar el repositorio:
+
+   ```bash
+   git clone <url-del-repositorio>
+   cd ingestion_service
    ```
+
+2. Iniciar los servicios con Docker Compose:
+
+   ```bash
+   docker-compose up -d
+   ```
+
+3. Verificar que los servicios estén funcionando:
+   ```bash
+   docker-compose ps
+   ```
+
+### Desarrollo Local
+
+1. Crear un entorno virtual:
+
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # En Windows: venv\Scripts\activate
+   ```
+
+2. Instalar dependencias:
+
+   ```bash
    pip install -r requirements.txt
    ```
-3. Configura la base de datos en el archivo `.env` (opcional)
-4. Ejecuta la aplicación:
+
+3. Iniciar Apache Pulsar localmente:
+
+   ```bash
+   docker-compose up -d pulsar postgres
    ```
-   python main.py
+
+4. Ejecutar los microservicios individualmente:
+   ```bash
+   python microservices/ingestion_service/main.py
+   python microservices/query_service/main.py
+   python microservices/processing_service/main.py
+   python microservices/validation_service/main.py
    ```
 
-### Docker
+## API Endpoints
 
-Para ejecutar el servicio utilizando Docker:
+### Servicio de Ingesta (puerto 5001)
 
-```
-docker build -t ingestion-service .
-docker run -p 5001:5001 ingestion-service
-```
+- `POST /ingest`: Ingesta nuevos datos
+  ```json
+  {
+    "partner_id": "partner123",
+    "payload": {
+      "name": "Example Data",
+      "age": 30,
+      "attributes": {
+        "key1": "value1",
+        "key2": "value2"
+      }
+    }
+  }
+  ```
 
-## Puntos Finales de la API
+### Servicio de Consulta (puerto 5002)
 
-- `POST /ingest`: Ingestar nuevos datos
-- `GET /ingest/<data_id>`: Obtener datos por ID
-- `GET /ingest/partner/<partner_id>`: Obtener todos los datos para un socio específico
-- `GET /ingest/all`: Obtener todos los datos ingeridos
+- `GET /query/{data_id}`: Obtiene datos por ID
+- `GET /query/partner/{partner_id}`: Obtiene todos los datos de un socio específico
+- `GET /query/all`: Obtiene todos los datos ingresados
+
+## Configuración
+
+La configuración se realiza principalmente a través de variables de entorno:
+
+- `PULSAR_SERVICE_URL`: URL del servicio de Apache Pulsar (por defecto: `pulsar://localhost:6650`)
+- `DATABASE_URL`: URL de conexión a la base de datos PostgreSQL
+- `PORT`: Puerto para los servicios web (por defecto: 5001 para ingesta, 5002 para consulta)
+
+## Arquitectura Hexagonal
+
+Este proyecto sigue los principios de la arquitectura hexagonal:
+
+- **Capa de Dominio**: Contiene las entidades, eventos y reglas de negocio.
+- **Capa de Aplicación**: Implementa los casos de uso mediante servicios, comandos y consultas.
+- **Capa de Infraestructura**: Proporciona implementaciones concretas para los puertos definidos en el dominio.

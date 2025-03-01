@@ -1,0 +1,139 @@
+services:
+  # Apache Pulsar
+  pulsar:
+    image: apachepulsar/pulsar:3.1.0
+    ports:
+      - "6650:6650" # Pulsar binary protocol
+      - "8080:8080" # Pulsar web admin
+    environment:
+      PULSAR_MEM: "-Xms1g -Xmx1g -XX:MaxDirectMemorySize=2g"
+      PULSAR_GC: "-XX:+UseG1GC -XX:MaxGCPauseMillis=10 -XX:+ParallelRefProcEnabled -XX:+UnlockExperimentalVMOptions -XX:+DoEscapeAnalysis -XX:ParallelGCThreads=4 -XX:ConcGCThreads=4"
+    command: >
+      /bin/bash -c "bin/apply-config-from-env.py conf/standalone.conf &&
+      bin/pulsar standalone"
+    volumes:
+      - pulsar_data:/pulsar/data
+      - pulsar_conf:/pulsar/conf
+    healthcheck:
+      test: ["CMD", "bin/pulsar-admin", "brokers", "healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # Pulsar Manager
+  pulsar-manager:
+    image: apachepulsar/pulsar-manager:v0.4.0
+    ports:
+      - "9527:9527" # Frontend port
+      - "7750:7750" # Backend port
+    environment:
+      SPRING_CONFIGURATION_FILE: /pulsar-manager/pulsar-manager/application.properties
+      REDIRECT_HOST: http://localhost
+      REDIRECT_PORT: 9527
+      DRIVER_CLASS_NAME: "org.postgresql.Driver"
+      URL: "jdbc:postgresql://postgres:5432/pulsar_manager"
+      USERNAME: "postgres"
+      PASSWORD: "postgres"
+    depends_on:
+      pulsar:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    volumes:
+      - pulsar_manager_data:/pulsar-manager/data
+
+  # Database
+  postgres:
+    image: postgres:14
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ingestion_service
+      POSTGRES_MULTIPLE_DATABASES: "ingestion_service,pulsar_manager"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-multiple-databases.sh:/docker-entrypoint-initdb.d/init-multiple-databases.sh
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Ingestion Service
+  ingestion_service:
+    build:
+      context: .
+      dockerfile: microservices/ingestion_service/Dockerfile
+    ports:
+      - "5001:5001"
+    environment:
+      - PULSAR_SERVICE_URL=pulsar://pulsar:6650
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/ingestion_service
+      - PORT=5001
+    depends_on:
+      pulsar:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./:/app
+
+  # Query Service
+  query_service:
+    build:
+      context: .
+      dockerfile: microservices/query_service/Dockerfile
+    ports:
+      - "5002:5002"
+    environment:
+      - PULSAR_SERVICE_URL=pulsar://pulsar:6650
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/ingestion_service
+      - PORT=5002
+    depends_on:
+      pulsar:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./:/app
+
+  # Processing Service
+  processing_service:
+    build:
+      context: .
+      dockerfile: microservices/processing_service/Dockerfile
+    environment:
+      - PULSAR_SERVICE_URL=pulsar://pulsar:6650
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/ingestion_service
+    depends_on:
+      pulsar:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./:/app
+
+  # Validation Service
+  validation_service:
+    build:
+      context: .
+      dockerfile: microservices/validation_service/Dockerfile
+    environment:
+      - PULSAR_SERVICE_URL=pulsar://pulsar:6650
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/ingestion_service
+    depends_on:
+      pulsar:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./:/app
+
+volumes:
+  pulsar_data:
+  pulsar_conf:
+  postgres_data:
+  pulsar_manager_data:
