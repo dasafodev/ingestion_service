@@ -1,0 +1,182 @@
+{
+    "info": {
+        "_postman_id": "b5e7a8f1-d3c4-4e5f-a6b7-c8d9e0f1a2b3",
+        "name": "Servicio de Ingesta de Datos",
+        "description": "Colección para probar los endpoints del sistema de ingesta de datos con arquitectura de microservicios",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "item": [
+        {
+            "name": "Servicio de Ingesta",
+            "item": [
+                {
+                    "name": "Ingestar Nuevos Datos",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"partner_id\": \"partner123\",\n  \"payload\": {\n    \"name\": \"Example Data\",\n    \"age\": 30,\n    \"attributes\": {\n      \"key1\": \"value1\",\n      \"key2\": \"value2\"\n    }\n  }\n}"
+                        },
+                        "url": {
+                            "raw": "http://localhost:5001/ingest",
+                            "protocol": "http",
+                            "host": [
+                                "localhost"
+                            ],
+                            "port": "5001",
+                            "path": [
+                                "ingest"
+                            ]
+                        },
+                        "description": "Endpoint para ingestar nuevos datos en el sistema"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Ingestar Datos Complejos",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"partner_id\": \"partner456\",\n  \"payload\": {\n    \"name\": \"Complex Data\",\n    \"type\": \"advanced\",\n    \"items\": [\n      {\n        \"id\": 1,\n        \"value\": \"item1\"\n      },\n      {\n        \"id\": 2,\n        \"value\": \"item2\"\n      }\n    ],\n    \"metadata\": {\n      \"source\": \"API\",\n      \"timestamp\": \"2023-08-15T14:30:00Z\"\n    }\n  }\n}"
+                        },
+                        "url": {
+                            "raw": "http://localhost:5001/ingest",
+                            "protocol": "http",
+                            "host": [
+                                "localhost"
+                            ],
+                            "port": "5001",
+                            "path": [
+                                "ingest"
+                            ]
+                        },
+                        "description": "Endpoint para ingestar datos con estructura compleja"
+                    },
+                    "response": []
+                }
+            ],
+            "description": "Endpoints relacionados con el servicio de ingesta de datos"
+        },
+        {
+            "name": "Servicio de Consulta",
+            "item": [
+                {
+                    "name": "Obtener Datos por ID",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "http://localhost:5002/query/{{data_id}}",
+                            "protocol": "http",
+                            "host": [
+                                "localhost"
+                            ],
+                            "port": "5002",
+                            "path": [
+                                "query",
+                                "{{data_id}}"
+                            ]
+                        },
+                        "description": "Obtiene datos específicos por su ID"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Obtener Datos por Partner ID",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "http://localhost:5002/query/partner/partner123",
+                            "protocol": "http",
+                            "host": [
+                                "localhost"
+                            ],
+                            "port": "5002",
+                            "path": [
+                                "query",
+                                "partner",
+                                "partner123"
+                            ]
+                        },
+                        "description": "Obtiene todos los datos asociados a un partner específico"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Obtener Todos los Datos",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "http://localhost:5002/query/all",
+                            "protocol": "http",
+                            "host": [
+                                "localhost"
+                            ],
+                            "port": "5002",
+                            "path": [
+                                "query",
+                                "all"
+                            ]
+                        },
+                        "description": "Obtiene todos los datos ingresados en el sistema"
+                    },
+                    "response": []
+                }
+            ],
+            "description": "Endpoints relacionados con el servicio de consulta de datos"
+        }
+    ],
+    "event": [
+        {
+            "listen": "prerequest",
+            "script": {
+                "type": "text/javascript",
+                "exec": [
+                    ""
+                ]
+            }
+        },
+        {
+            "listen": "test",
+            "script": {
+                "type": "text/javascript",
+                "exec": [
+                    "// Guardar el ID de datos devuelto por la respuesta de ingesta",
+                    "if (pm.response.code === 201 && pm.request.url.toString().includes('/ingest')) {",
+                    "    try {",
+                    "        const responseData = pm.response.json();",
+                    "        if (responseData.data_id) {",
+                    "            pm.environment.set('data_id', responseData.data_id);",
+                    "            console.log('ID de datos guardado: ' + responseData.data_id);",
+                    "        }",
+                    "    } catch (e) {",
+                    "        console.error('Error al procesar la respuesta: ' + e);",
+                    "    }",
+                    "}"
+                ]
+            }
+        }
+    ],
+    "variable": [
+        {
+            "key": "data_id",
+            "value": "",
+            "type": "string"
+        }
+    ]
+}
