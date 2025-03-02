@@ -13,6 +13,62 @@ El sistema está compuesto por los siguientes microservicios:
 
 Los microservicios se comunican entre sí mediante eventos publicados en Apache Pulsar, lo que permite un acoplamiento débil y una alta escalabilidad.
 
+## Topología de Administración de Datos
+
+### Topología Descentralizada
+
+Este proyecto implementa una **topología descentralizada** para la administración de datos, donde cada microservicio gestiona su propio almacenamiento de datos. Esta decisión se justifica por las siguientes razones:
+
+1. **Alta autonomía**: Cada servicio puede evolucionar independientemente sin afectar a otros.
+2. **Escalabilidad independiente**: Los servicios pueden escalar según sus propias necesidades.
+3. **Aislamiento de fallos**: Los problemas en un servicio no afectan directamente a otros.
+4. **Especialización de almacenamiento**: Cada servicio puede utilizar el tipo de base de datos más adecuado para sus necesidades específicas.
+
+Aunque esta topología introduce desafíos como la consistencia eventual y la complejidad en consultas que cruzan servicios, estos se mitigan mediante el uso de eventos de dominio que mantienen la coherencia entre servicios.
+
+## Modelo de Persistencia de Datos
+
+### Event Sourcing
+
+Hemos implementado el modelo de **Event Sourcing** en nuestros microservicios, lo que significa que:
+
+1. Todos los cambios en el estado de la aplicación se capturan como una secuencia de eventos.
+2. Estos eventos se almacenan en un registro inmutable (event store).
+3. El estado actual se puede reconstruir reproduciendo los eventos.
+
+Esta elección proporciona:
+
+- **Trazabilidad completa**: Historial completo de todas las operaciones y cambios.
+- **Capacidad de auditoría**: Facilita cumplir con requisitos regulatorios.
+- **Reconstrucción de estados pasados**: Posibilidad de "viajar en el tiempo" para análisis o depuración.
+- **Desacoplamiento**: Separación clara entre la captura de eventos y su procesamiento.
+
+### Implementación en los Servicios
+
+#### 1. Servicio de Ingesta
+
+- Captura eventos `DataReceived` cuando se reciben datos de socios.
+- Almacena estos eventos en un event store antes de cualquier procesamiento.
+- Publica eventos `DataIngested` para notificar a otros servicios.
+
+#### 2. Servicio de Consulta
+
+- Mantiene una vista materializada optimizada para consultas.
+- Se suscribe a eventos `DataIngested`, `DataProcessed` y `DataValidated` para actualizar sus vistas.
+- Proporciona APIs para consultar datos sin acceder directamente a los event stores de otros servicios.
+
+#### 3. Servicio de Procesamiento
+
+- Consume eventos `DataIngested` para iniciar el procesamiento.
+- Registra cada paso del procesamiento como eventos.
+- Publica eventos `DataProcessed` con los resultados.
+
+#### 4. Servicio de Validación
+
+- Consume eventos `DataIngested` para validar los datos.
+- Registra los resultados de validación como eventos.
+- Publica eventos `DataValidated` con el estado de validación.
+
 ## Eventos del Dominio
 
 - **DataIngested**: Se publica cuando se ingresan nuevos datos.
@@ -30,19 +86,17 @@ Los microservicios se comunican entre sí mediante eventos publicados en Apache 
 
 ## Estructura del Proyecto
 
-```
 ingestion_service/
-├── domain/                 # Capa de dominio (entidades, eventos, etc.)
-├── application/            # Capa de aplicación (servicios, comandos, consultas)
-├── infrastructure/         # Capa de infraestructura (implementaciones concretas)
-├── microservices/          # Implementaciones de microservicios
-│   ├── ingestion_service/  # Servicio de ingesta
-│   ├── query_service/      # Servicio de consulta
-│   ├── processing_service/ # Servicio de procesamiento
-│   └── validation_service/ # Servicio de validación
-├── docker-compose.yml      # Configuración de Docker Compose
-└── requirements.txt        # Dependencias del proyecto
-```
+├── domain/ # Capa de dominio (entidades, eventos, etc.)
+├── application/ # Capa de aplicación (servicios, comandos, consultas)
+├── infrastructure/ # Capa de infraestructura (implementaciones concretas)
+├── microservices/ # Implementaciones de microservicios
+│ ├── ingestion_service/ # Servicio de ingesta
+│ ├── query_service/ # Servicio de consulta
+│ ├── processing_service/ # Servicio de procesamiento
+│ └── validation_service/ # Servicio de validación
+├── docker-compose.yml # Configuración de Docker Compose
+└── requirements.txt # Dependencias del proyecto
 
 ## Instalación y Ejecución
 
