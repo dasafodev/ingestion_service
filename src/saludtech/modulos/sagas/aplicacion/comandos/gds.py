@@ -1,0 +1,7 @@
+
+class ConfirmarProcessedImage():
+    ...
+
+class RevertirConfirmacion():
+    ...
+

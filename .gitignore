@@ -7,3 +7,5 @@ __pycache__/
 *.pyz
 
 ingestion_service.db
+
+data/*

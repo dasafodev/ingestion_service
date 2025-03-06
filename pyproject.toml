@@ -1,0 +1,17 @@
+[project]
+name = "saludtech"
+version = "1.0.0"
+authors = [
+  { name="Inés Rojas", email="ia.rojas2@uniandes.edu.co" },
+]
+description = "Proyecto de ejemplo de saludtech"
+readme = "README.md"
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+addopts = [
+    "--import-mode=importlib",
+]
+pythonpath = [
+  ".", "src",
+]

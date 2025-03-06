@@ -1,0 +1,6 @@
+
+class PagarProcessedImage():
+    ...
+
+class RevertirPago():
+    ...

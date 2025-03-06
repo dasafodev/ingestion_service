@@ -1,0 +1,10 @@
+from pydispatch import dispatcher
+
+from .handlers import HandlerProcessedImageIntegracion
+
+from saludtech.modulos.processed_data.dominio.eventos.processed_images import ProcessedImageCreada, ProcessedImageCancelada, ProcessedImageGuardada, ProcessedImageBorrada
+
+dispatcher.connect(HandlerProcessedImageIntegracion.handle_processed_image_creada, signal=f'{ProcessedImageCreada.__name__}Integracion')
+dispatcher.connect(HandlerProcessedImageIntegracion.handle_processed_image_cancelada, signal=f'{ProcessedImageCancelada.__name__}Integracion')
+dispatcher.connect(HandlerProcessedImageIntegracion.handle_processed_image_borrada, signal=f'{ProcessedImageBorrada.__name__}Integracion')
+dispatcher.connect(HandlerProcessedImageIntegracion.handle_processed_image_guardada, signal=f'{ProcessedImageGuardada.__name__}Integracion')

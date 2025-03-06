@@ -1,139 +1,212 @@
-services:
-  # Apache Pulsar
+version: '3'
+networks:
   pulsar:
-    image: apachepulsar/pulsar:3.1.0
-    ports:
-      - "6650:6650" # Pulsar binary protocol
-      - "8080:8080" # Pulsar web admin
+    driver: bridge
+  sidecar:
+    driver: bridge
+services:
+# Start zookeeper
+  zookeeper:
+    image: apachepulsar/pulsar:latest
+    profiles: ["pulsar"]
+    container_name: zookeeper
+    restart: on-failure
+    networks:
+      - pulsar
+    volumes:
+      - ./data/zookeeper:/pulsar/data/zookeeper
     environment:
-      PULSAR_MEM: "-Xms1g -Xmx1g -XX:MaxDirectMemorySize=2g"
-      PULSAR_GC: "-XX:+UseG1GC -XX:MaxGCPauseMillis=10 -XX:+ParallelRefProcEnabled -XX:+UnlockExperimentalVMOptions -XX:+DoEscapeAnalysis -XX:ParallelGCThreads=4 -XX:ConcGCThreads=4"
+      - metadataStoreUrl=zk:zookeeper:2181
     command: >
-      /bin/bash -c "bin/apply-config-from-env.py conf/standalone.conf &&
-      bin/pulsar standalone"
-    volumes:
-      - pulsar_data:/pulsar/data
-      - pulsar_conf:/pulsar/conf
+      bash -c "bin/apply-config-from-env.py conf/zookeeper.conf && \
+             bin/generate-zookeeper-config.sh conf/zookeeper.conf && \
+             exec bin/pulsar zookeeper"
     healthcheck:
-      test: ["CMD", "bin/pulsar-admin", "brokers", "healthcheck"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
-
-  # Pulsar Manager
-  pulsar-manager:
-    image: apachepulsar/pulsar-manager:v0.4.0
-    ports:
-      - "9527:9527" # Frontend port
-      - "7750:7750" # Backend port
-    environment:
-      SPRING_CONFIGURATION_FILE: /pulsar-manager/pulsar-manager/application.properties
-      REDIRECT_HOST: http://localhost
-      REDIRECT_PORT: 9527
-      DRIVER_CLASS_NAME: "org.postgresql.Driver"
-      URL: "jdbc:postgresql://postgres:5432/pulsar_manager"
-      USERNAME: "postgres"
-      PASSWORD: "postgres"
-    depends_on:
-      pulsar:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-    volumes:
-      - pulsar_manager_data:/pulsar-manager/data
-
-  # Database
-  postgres:
-    image: postgres:14
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: ingestion_service
-      POSTGRES_MULTIPLE_DATABASES: "ingestion_service,pulsar_manager"
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./init-multiple-databases.sh:/docker-entrypoint-initdb.d/init-multiple-databases.sh
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD", "bin/pulsar-zookeeper-ruok.sh"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 30
 
-  # Ingestion Service
-  ingestion_service:
-    build:
-      context: .
-      dockerfile: microservices/ingestion_service/Dockerfile
+# Init cluster metadata
+  pulsar-init:
+    container_name: pulsar-init
+    hostname: pulsar-init
+    image: apachepulsar/pulsar:latest
+    profiles: ["pulsar"]
+    networks:
+      - pulsar
+    command: >
+      bin/pulsar initialize-cluster-metadata --cluster cluster-a  --zookeeper zookeeper:2181  --configuration-store zookeeper:2181 --web-service-url http://broker:8080 --broker-service-url pulsar://broker:6650
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+
+# Start bookie
+  bookie:
+    image: apachepulsar/pulsar:latest
+    profiles: ["pulsar"]
+    container_name: bookie
+    restart: on-failure
+    networks:
+      - pulsar
+    environment:
+      - clusterName=cluster-a
+      - zkServers=zookeeper:2181
+      - metadataServiceUri=metadata-store:zk:zookeeper:2181
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+      pulsar-init:
+        condition: service_completed_successfully
+  # Map the local directory to the container to avoid bookie startup failure due to insufficient container disks.
+    volumes:
+      - ./data/bookkeeper:/pulsar/data/bookkeeper
+    command: bash -c "bin/apply-config-from-env.py conf/bookkeeper.conf
+      && exec bin/pulsar bookie"
+
+# Start broker
+  broker:
+    image: apachepulsar/pulsar:latest
+    profiles: ["pulsar"]
+    container_name: broker
+    hostname: broker
+    restart: on-failure
+    networks:
+      - pulsar
+    environment:
+      - metadataStoreUrl=zk:zookeeper:2181
+      - zookeeperServers=zookeeper:2181
+      - clusterName=cluster-a
+      - managedLedgerDefaultEnsembleSize=1
+      - managedLedgerDefaultWriteQuorum=1
+      - managedLedgerDefaultAckQuorum=1
+      - advertisedAddress=broker
+      - advertisedListeners=external:pulsar://127.0.0.1:6650
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+      bookie:
+        condition: service_started
     ports:
-      - "5001:5001"
-    environment:
-      - PULSAR_SERVICE_URL=pulsar://pulsar:6650
-      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/ingestion_service
-      - PORT=5001
-    depends_on:
-      pulsar:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
+      - "6650:6650"
+      - "8080:8080"
     volumes:
-      - ./:/app
-
-  # Query Service
-  query_service:
-    build:
-      context: .
-      dockerfile: microservices/query_service/Dockerfile
+      - ./connectors/pulsar:/pulsar/connectors
+    command: bash -c "bin/apply-config-from-env.py conf/broker.conf
+      &&  exec bin/pulsar broker"
+  
+  # MySQL8
+  db:
+    image: mysql:8
+    hostname: mysqldb
+    container_name: mysqldb
+    cap_add:
+      - SYS_NICE
+    restart: always
+    environment:
+      - MYSQL_DATABASE=saludtech
+      - MYSQL_ROOT_PASSWORD=adminadmin
+    profiles: ["saludtech", "db"]
+    networks:
+      - pulsar
     ports:
-      - "5002:5002"
-    environment:
-      - PULSAR_SERVICE_URL=pulsar://pulsar:6650
-      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/ingestion_service
-      - PORT=5002
-    depends_on:
-      pulsar:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
+      - '3306:3306'
     volumes:
-      - ./:/app
-
-  # Processing Service
-  processing_service:
-    build:
-      context: .
-      dockerfile: microservices/processing_service/Dockerfile
-    environment:
-      - PULSAR_SERVICE_URL=pulsar://pulsar:6650
-      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/ingestion_service
+      - ./data/mysql:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql  
+  # Servicios de SaludTech
+  saludtech:
+    container_name: saludtech
+    hostname: saludtech
+    image: saludtech/flask 
+    profiles: ["saludtech", "monolito"]
+    networks:
+      - sidecar
+      - pulsar
+    labels:
+      SidecarDiscover: "false"
     depends_on:
-      pulsar:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-    volumes:
-      - ./:/app
-
-  # Validation Service
-  validation_service:
-    build:
-      context: .
-      dockerfile: microservices/validation_service/Dockerfile
+      - broker
+      - db
     environment:
-      - PULSAR_SERVICE_URL=pulsar://pulsar:6650
-      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/ingestion_service
+      - SALUDTECH_ADDRESS=saludtech
+      - PULSAR_ADDRESS=broker
+    ports:
+      - "5000:5000"
+  adaptador:
+    image: "saludtech/adaptador"
+    profiles: ["saludtech", "monolito"]
+    container_name: adaptador
+    hostname: adaptador
     depends_on:
-      pulsar:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-    volumes:
-      - ./:/app
-
-volumes:
-  pulsar_data:
-  pulsar_conf:
-  postgres_data:
-  pulsar_manager_data:
+      - saludtech
+    networks:
+      - sidecar
+    environment:
+      - SALUDTECH_ADDRESS=saludtech
+      - PULSAR_ADDRESS=broker
+    ports:
+      - "50051:50051"
+  
+  # Servicios de Notificación
+  notificacion:
+    container_name: notificacion
+    hostname: notificacion
+    image: saludtech/notificacion 
+    profiles: ["saludtech", "notificacion"]
+    depends_on:
+      - saludtech
+      - broker
+    environment:
+      - SALUDTECH_ADDRESS=saludtech
+      - PULSAR_ADDRESS=broker
+    networks:
+      - pulsar
+  # Servicio UI
+  ui:
+    container_name: ui
+    hostname: ui
+    image: saludtech/ui 
+    profiles: ["saludtech", "ui"]
+    depends_on:
+      - saludtech
+      - broker
+    environment:
+      - SALUDTECH_ADDRESS=saludtech
+      - PULSAR_ADDRESS=broker
+    networks:
+      - pulsar
+    ports:
+      - "5678:5678"
+  # Servicio Cliente
+  cliente:
+    container_name: cliente
+    hostname: cliente
+    image: saludtech/cliente 
+    profiles: ["saludtech", "cliente"]
+    depends_on:
+      - saludtech
+      - broker
+    environment:
+      - SALUDTECH_ADDRESS=saludtech
+      - BROKER_HOST=broker
+    networks:
+      - pulsar
+    ports:
+      - "8000:8000"
+  # Servicio Pagos
+  pagos:
+    container_name: pagos
+    hostname: pagos
+    image: saludtech/pagos 
+    profiles: ["saludtech", "pagos"]
+    depends_on:
+      - saludtech
+      - broker
+    environment:
+      - SALUDTECH_ADDRESS=saludtech
+      - BROKER_HOST=broker
+    networks:
+      - pulsar
+    ports:
+      - "8001:8001"
